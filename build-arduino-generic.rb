@@ -55,6 +55,7 @@ BASIC_ARDUINO_IDIRS = [
 
 # returns an array of strings.
 def arduinoIncludeDirctories
+	patterns = {}
 	idirs = BASIC_ARDUINO_IDIRS.clone
 	roots = [
 		ARDUINO_SDK_DIR+'libraries',
@@ -99,6 +100,11 @@ def arduinoIncludeDirctories
 						# As a special addition, arduino libraries may include a "utility" subdirectory.
 						# If present, this directory will be added as an include directory for that library,
 						# and its source files will be compiled.
+						util = idir+'/utility'
+						if(Dir.exist?(util) && !patterns[idir])
+							idirs << util
+							patterns[Regexp.new(Regexp.escape(idir))] = idirFlags(idirs)
+						end
 						break
 					end
 				end
@@ -111,7 +117,7 @@ def arduinoIncludeDirctories
 		end
 	end
 
-	return idirs
+	return idirs, patterns
 end
 
 module GccCompilerModule
@@ -128,6 +134,10 @@ module GccCompilerModule
 	end
 end
 
+def idirFlags(idirs)
+	idirs.reject {|dir| BASIC_ARDUINO_IDIRS.include?(dir)}.collect {|dir| " -I\""+File.expand_path_fix(dir)+'"'}.join
+end
+
 class ArduinoWork < ExeWork
 	def initialize(*a)
 		@TARGET_PLATFORM == :arduino
@@ -135,9 +145,9 @@ class ArduinoWork < ExeWork
 		@SOURCE_TASKS = genArduinoSourceTasks
 		@NAME = NAME
 
-		idirs = arduinoIncludeDirctories
+		idirs, @PATTERN_CFLAGS = arduinoIncludeDirctories
 		@SPECIFIC_CFLAGS = {
-			NAME+'.ino.cpp' => idirs.reject {|dir| BASIC_ARDUINO_IDIRS.include?(dir)}.collect {|dir| " -I\""+File.expand_path_fix(dir)+'"'}.join,
+			NAME+'.ino.cpp' => idirFlags(idirs),
 			# work around bugs in the Arduino libs
 			'HardwareSerial.cpp' => ' -Wno-sign-compare -Wno-shadow -Wno-unused -Wno-empty-body',
 			'Print.cpp' => ' -Wno-attributes',
@@ -151,6 +161,8 @@ class ArduinoWork < ExeWork
 
 		@SOURCES = idirs
 		@EXTRA_INCLUDES = BASIC_ARDUINO_IDIRS
+
+		@EXTRA_LINKFLAGS = ' -Os -Wl,--gc-sections -mmcu=atmega328p'
 		super
 	end
 	def targetName

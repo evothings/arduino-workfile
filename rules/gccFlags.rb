@@ -120,7 +120,6 @@ if(@TARGET_PLATFORM == :win32)
 	target_flags = ' -DWIN32'
 	target_cppflags = ''
 elsif(@TARGET_PLATFORM == :arduino)
-	puts "TARGET_PLATFORM == :arduino"
 	target_flags = ' -fno-exceptions -ffunction-sections -fdata-sections'+
 		' -mmcu=atmega328p -DF_CPU=16000000L -MMD -DUSB_VID=null -DUSB_PID=null -DARDUINO=105'
 	target_cppflags = ''

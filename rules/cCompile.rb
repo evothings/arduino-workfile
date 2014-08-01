@@ -135,6 +135,10 @@ class CCompileWork < FileTask
 		# Value is extra compile flags to be used when compiling that file.
 		default(:SPECIFIC_CFLAGS, {})
 
+		# Hash(Regexp,String). Key matches the path of a source file.
+		# Value is extra compile flags to be used when compiling matching files.
+		default(:PATTERN_CFLAGS, {})
+
 		# Boolean. While true, assembly source files will be automatically collected
 		# from SOURCE directories, much like C/C++ files.
 		default(:COLLECT_S_FILES, true)
@@ -284,6 +288,11 @@ private
 		flags = @CFLAGS_MAP[ext]
 		if(flags == nil) then
 			error "Bad ext: '#{ext}' on source '#{source}'"
+		end
+		@PATTERN_CFLAGS.each do |pattern, flag|
+			if(pattern.match(source.to_s))
+				flags += flag
+			end
 		end
 		return flags + @SPECIFIC_CFLAGS.fetch(File.basename(source.to_s), "")
 	end
