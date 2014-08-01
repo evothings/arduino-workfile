@@ -60,3 +60,19 @@ module FlagsChanged
 		end
 	end
 end
+
+class ShellTask < FileTask
+	include FlagsChanged
+	def initialize(name, preqs, command)
+		@command = command
+		@prerequisites = preqs
+		super(name)
+	end
+	def cFlags
+		return @command
+	end
+	def fileExecute
+		execFlags
+		sh cFlags
+	end
+end

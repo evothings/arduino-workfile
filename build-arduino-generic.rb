@@ -34,6 +34,7 @@ end
 
 class ArduinoSourceTask < MemoryGeneratedFileTask
 	def initialize
+		@prerequisites = [DirTask.new('build/src')]
 		super('build/src/'+inoFileName+'.cpp') do
 			io = StringIO.new
 			io.puts("#line 1 \"#{File.expand_path inoFileName}\"")
@@ -141,7 +142,6 @@ end
 class ArduinoWork < ExeWork
 	def initialize(*a)
 		@TARGET_PLATFORM == :arduino
-		@prerequisites = [DirTask.new('build/src')]
 		@SOURCE_TASKS = genArduinoSourceTasks
 		@NAME = NAME
 
@@ -164,6 +164,13 @@ class ArduinoWork < ExeWork
 
 		@EXTRA_LINKFLAGS = ' -Os -Wl,--gc-sections -mmcu=atmega328p'
 		super
+		# Once this object is properly constructed, we can create the ones that depend on it.
+		elf = self
+		ShellTask.new(@BUILDDIR+NAME+'.eep', [elf],
+			"\"#{ARDUINO_SDK_DIR}hardware/tools/avr/bin/avr-objcopy\" -O ihex -j .eeprom --set-section-flags=.eeprom=alloc,load"+
+			" --no-change-warnings --change-section-lma .eeprom=0 \"#{elf}\" \"#{@BUILDDIR+NAME+'.eep'}\"")
+		ShellTask.new(@BUILDDIR+NAME+'.hex', [elf],
+			"\"#{ARDUINO_SDK_DIR}hardware/tools/avr/bin/avr-objcopy\" -O ihex -R .eeprom \"#{elf}\" \"#{@BUILDDIR+NAME+'.hex'}\"")
 	end
 	def targetName
 		return CCompileTask.genFilename(@COMMON_EXE ? @COMMON_BUILDDIR : @BUILDDIR, @NAME, '.elf')
