@@ -1,0 +1,15 @@
+14:23 2013-07-11
+Ruby's default global exception handler (DFE) is invoked whenever an exception is raised and not resuced.
+It's written in C, and is a part of the core interpreter. It is not visible to Ruby programs in any class or module.
+
+Therefore it is somewhat difficult to override.
+
+It prints the exception's backtrace, but does so in a somewhat ugly fashion that cannot be parsed by my favourite editor SciTE.
+
+So when I wrote an improved backtrace printer for a thread pool's exception handling, I decided to try to also apply it to exceptions outside the thread pool.
+
+Overriding Kernel.raise is possible, but doing so prevents any exception rescue in other code. No good.
+
+I settled on overriding Exception.message. It is called by the DFE, and I can use Thread.current.backtrace.size to determine if the function is being called by anything else. That size will be 1 if the function is being called by the DFE, and greater otherwise.
+
+From Exception.message I call the backtrace printer, followed by exit!(). Simple and small.

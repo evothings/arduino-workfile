@@ -1,0 +1,34 @@
+11:51 2013-07-03
+Current system works by calling "invoke" on works and tasks. "invoke" calls each prerequisite, in order, and then checks itself, calling "execute" if needed.
+
+On Works, "setup" is called before "invoke". "setup" creates all prerequisites, but doesn't check if they need to be built or not.
+
+If a Task has prerequisites, they are created at "initialize" time, or by "setup".
+
+Since things are done in order, this system is single-threaded, and therefore slower than a multi-threaded variant could be, on multi-core machines.
+
+A properly parallel system would check which prereqs are needed at initialize time. There would be no "setup" function. There would be a singleton queue of tasks to be executed. This queue would be populated at initialize time, by the base class's "initialize". (This assumes that it's possible to force a base constructor to be run). Once initialization of all tasks is complete, the queue can be started by calling Works.run or something like that.
+
+Side note: force pre|post_initialize to run by this method:
+def self.new(*a, &b)
+	x = allocate
+	x.pre_initialize
+	x.send(:initialize, *a, &b)
+	x.post_initialize
+	return x
+end
+
+Or, just assume child classes will call super. After all, if they don't, they can't get scheduled and run.
+
+Also, we'd like the ability to chain multiple DLL/EXE tasks so that advanced, multi-module programs can be built optimally.
+
+10:31 2013-07-08
+The old system of using "needed?" to check that a task was successfully executed will not work here.
+
+Also, it has a bug; if the prerequisites change, like C header files, the new headers will not be checked, and the old ones will.
+If some of the old headers have been deleted, there will be a false negative.
+
+12:39 2013-09-04
+Todo: option to redo set_needed on all tasks, to make sure they don't still need to be rebuilt.
+This also needs to recalculate prerequisites, in case of changed header files...
+probably easiest to create a new workfile process with a special option.
