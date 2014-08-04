@@ -7,6 +7,8 @@
 
 require 'stringio'
 
+require './preprocess.rb'
+
 require './localConfig.rb'
 [
 	:ARDUINO_SDK_DIR,
@@ -36,10 +38,7 @@ class ArduinoSourceTask < MemoryGeneratedFileTask
 	def initialize
 		@prerequisites = [DirTask.new('build/src')]
 		super('build/src/'+inoFileName+'.cpp') do
-			io = StringIO.new
-			io.puts("#line 1 \"#{File.expand_path inoFileName}\"")
-			io.write(IO.read(inoFileName))
-			@buf = io.string
+			@buf = preprocess(IO.read(inoFileName), inoFileName)
 		end
 	end
 end
