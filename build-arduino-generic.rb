@@ -7,6 +7,10 @@
 
 require 'stringio'
 
+# This will probably fail on non-Windows platforms.
+# TODO: fix.
+require 'win32/registry'
+
 require './preprocess.rb'
 
 require './localConfig.rb'
@@ -182,9 +186,38 @@ end
 
 work = ArduinoWork.new
 
+def findDefaultComPort
+	found = nil
+	# This will definitely fail on non-Windows platforms.
+	# TODO: fix.
+
+	# This function is heuristical and may need modification in the future.
+	# Investigation has shows that Windows stores the numbers of all active serial ports in this Registry key.
+	# Arduino boards are usually connected by USB and appear to have a name starting with '\Device\USBSER'.
+	# It is, as yet, unknown how far this will hold true.
+	Win32::Registry::HKEY_LOCAL_MACHINE.open('HARDWARE\DEVICEMAP\SERIALCOMM') do |reg|
+		reg.each do |name, type, value|
+			if(name.start_with?('\Device\USBSER'))
+				raise "Multiple default COM ports found! Unplug all but one, or choose manually." if(found)
+				found = value
+			end
+		end
+	end
+	raise "No appropriate default COM port found! Plug in an Arduino unit, or choose manually." if(!found)
+	return found
+end
+
+def selectComPort
+	if(ARDUINO_COM_PORT == :default)
+		return findDefaultComPort
+	else
+		return "COM#{ARDUINO_COM_PORT}"
+	end
+end
+
 target :run do
 	sh "\"#{ARDUINO_SDK_DIR}hardware/tools/avr/bin/avrdude\" \"-C#{ARDUINO_SDK_DIR}hardware/tools/avr/etc/avrdude.conf\""+
-		" -V -patmega328p -carduino -P\\\\.\\COM#{ARDUINO_COM_PORT} -b115200 -D \"-Uflash:w:#{work.hexFile}:i\""
+		" -V -patmega328p -carduino -P\\\\.\\#{selectComPort} -b115200 -D \"-Uflash:w:#{work.hexFile}:i\""
 end
 
 Works.run
