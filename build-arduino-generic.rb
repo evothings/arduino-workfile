@@ -13,6 +13,7 @@ require './localConfig.rb'
 [
 	:ARDUINO_SDK_DIR,
 	:ARDUINO_LIB_DIR,
+	:ARDUINO_COM_PORT,
 ].each do |const|
 	if(!Module.const_defined?(const))
 		raise "localConfig.rb must define #{const}"
@@ -168,14 +169,22 @@ class ArduinoWork < ExeWork
 		ShellTask.new(@BUILDDIR+NAME+'.eep', [elf],
 			"\"#{ARDUINO_SDK_DIR}hardware/tools/avr/bin/avr-objcopy\" -O ihex -j .eeprom --set-section-flags=.eeprom=alloc,load"+
 			" --no-change-warnings --change-section-lma .eeprom=0 \"#{elf}\" \"#{@BUILDDIR+NAME+'.eep'}\"")
-		ShellTask.new(@BUILDDIR+NAME+'.hex', [elf],
+		@hexFile = ShellTask.new(@BUILDDIR+NAME+'.hex', [elf],
 			"\"#{ARDUINO_SDK_DIR}hardware/tools/avr/bin/avr-objcopy\" -O ihex -R .eeprom \"#{elf}\" \"#{@BUILDDIR+NAME+'.hex'}\"")
+	end
+	def hexFile
+		@hexFile
 	end
 	def targetName
 		return CCompileTask.genFilename(@COMMON_EXE ? @COMMON_BUILDDIR : @BUILDDIR, @NAME, '.elf')
 	end
 end
 
-ArduinoWork.new
+work = ArduinoWork.new
+
+target :run do
+	sh "\"#{ARDUINO_SDK_DIR}hardware/tools/avr/bin/avrdude\" \"-C#{ARDUINO_SDK_DIR}hardware/tools/avr/etc/avrdude.conf\""+
+		" -V -patmega328p -carduino -P\\\\.\\COM#{ARDUINO_COM_PORT} -b115200 -D \"-Uflash:w:#{work.hexFile}:i\""
+end
 
 Works.run
