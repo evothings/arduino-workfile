@@ -1,0 +1,3 @@
+ARDUINO_SDK_DIR = 'c:/Program Files (x86)/Arduino/'
+ARDUINO_LIB_DIR = 'c:/Users/foobar/Documents/Arduino/libraries/'
+ARDUINO_COM_PORT = :default
