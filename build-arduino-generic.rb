@@ -35,6 +35,10 @@ NAME = File.basename(Dir.pwd)
 
 require CExe
 
+if(File.exist?('settings.rb'))
+	require './settings.rb'
+end
+
 def inoFileName
 	NAME+'.ino'
 end
@@ -54,18 +58,52 @@ def genArduinoSourceTasks
 end
 
 BASIC_ARDUINO_IDIRS = [
-	ARDUINO_SDK_DIR+'hardware/arduino/cores/arduino',
-	ARDUINO_SDK_DIR+'hardware/arduino/variants/standard',
+	ARDUINO_SDK_DIR+'hardware/arduino/'+ARDUINO_ARCHITECTURE+'cores/arduino',
+	ARDUINO_SDK_DIR+'hardware/arduino/'+ARDUINO_ARCHITECTURE+'variants/standard',
 ]
 
 # returns an array of strings.
 def arduinoIncludeDirctories
 	patterns = {}
+	utils = []
 	idirs = BASIC_ARDUINO_IDIRS.clone
 	roots = [
-		ARDUINO_SDK_DIR+'libraries',
+		ARDUINO_SDK_DIR+'hardware/arduino/'+ARDUINO_ARCHITECTURE+'libraries/',
+		ARDUINO_SDK_DIR+'libraries/',
 		ARDUINO_LIB_DIR,
 	]
+
+	addIdir = proc do |idir|
+		idirs << idir
+		# As a special addition, arduino libraries may include a "utility" subdirectory.
+		# If present, this directory will be added as an include directory for that library,
+		# and its source files will be compiled.
+		util = idir+'/utility'
+		if(Dir.exist?(util))
+			utils << util
+			if(!patterns[idir])
+				patterns[Regexp.new(Regexp.escape(idir))] = idirFlags([util])
+			end
+		end
+	end
+
+	# from project's settings.rb
+	if(defined?(LIBRARIES))
+		LIBRARIES.each do |lib|
+			found = false
+			roots.each do |root|
+				idir = root+lib
+				if(File.exist?(idir))
+					found = true
+					puts "Found library #{lib} in #{idir}"
+					addIdir.call(idir)
+					break
+				end
+			end
+			raise "Library #{lib} not found!" if(!found)
+		end
+	end
+
 	# find directories based on .ino #includes.
 	# each include must be found in only one of the idirs,
 	# or its noExtName be in only one of the roots and the include be found in that dir.
@@ -97,19 +135,12 @@ def arduinoIncludeDirctories
 			if(!found)
 				roots.each do |root|
 					extensionlessName = File.basename(include, File.extname(include))
-					idir = root+'/'+extensionlessName
+					idir = root+extensionlessName
+					#puts "test #{idir}"
 					if(File.exist?(idir) && File.exist?(idir+'/'+include))
 						found = true
 						puts "Found <#{include}> in #{idir}"
-						idirs << idir
-						# As a special addition, arduino libraries may include a "utility" subdirectory.
-						# If present, this directory will be added as an include directory for that library,
-						# and its source files will be compiled.
-						util = idir+'/utility'
-						if(Dir.exist?(util) && !patterns[idir])
-							idirs << util
-							patterns[Regexp.new(Regexp.escape(idir))] = idirFlags(idirs)
-						end
+						addIdir.call(idir)
 						break
 					end
 				end
@@ -122,38 +153,49 @@ def arduinoIncludeDirctories
 		end
 	end
 
-	return idirs, patterns
+	return idirs, utils, patterns
 end
 
-module GccCompilerModule
+module ArduinoCompilerModule
+	include GccCompilerModule
 	def gcc
 		ARDUINO_SDK_DIR+'hardware\tools\avr\bin\avr-gcc'
 	end
 	alias old_setCompilerVersion setCompilerVersion
 	def setCompilerVersion
 		default(:TARGET_PLATFORM, :arduino)
+		oldDir = Dir.pwd
+		# This is required to access the cygwin dll files in Arduino 1.5.
+		Dir.chdir(ARDUINO_SDK_DIR)
 		old_setCompilerVersion
+		Dir.chdir(oldDir)
 	end
 	def linkerName
 		ARDUINO_SDK_DIR+'hardware\tools\avr\bin\avr-gcc'
 	end
 end
 
+ENV['CYGWIN'] = 'nodosfilewarning'
+
 def idirFlags(idirs)
 	idirs.reject {|dir| BASIC_ARDUINO_IDIRS.include?(dir)}.collect {|dir| " -I\""+File.expand_path_fix(dir)+'"'}.join
 end
 
 class ArduinoWork < ExeWork
-	def initialize(*a)
-		@TARGET_PLATFORM == :arduino
+	def initialize
+		@TARGET_PLATFORM = :arduino
+		super(ArduinoCompilerModule) do
 		@SOURCE_TASKS = genArduinoSourceTasks
 		@NAME = NAME
 
-		idirs, @PATTERN_CFLAGS = arduinoIncludeDirctories
+		idirs, utils, @PATTERN_CFLAGS = arduinoIncludeDirctories
+		#p @PATTERN_CFLAGS
 		@SPECIFIC_CFLAGS = {
 			NAME+'.ino.cpp' => idirFlags(idirs),
-			# work around bugs in the Arduino libs
+			# Work around bugs in the Arduino libs.
+			# TODO: For Fun, disable all these flags and fix the bugs.
 			'HardwareSerial.cpp' => ' -Wno-sign-compare -Wno-shadow -Wno-unused -Wno-empty-body',
+			'HardwareSerial0.cpp' => ' -Wno-missing-declarations',
 			'Print.cpp' => ' -Wno-attributes',
 			'Tone.cpp' => ' -Wno-shadow -Wno-missing-declarations -Wno-error',
 			'WMath.cpp' => ' -Wno-missing-declarations -Wno-shadow',
@@ -168,13 +210,25 @@ class ArduinoWork < ExeWork
 			'server_drv.cpp' => ' -Wno-undef',
 			'spi_drv.cpp' => ' -Wno-missing-declarations -Wno-undef -Wno-error',
 			'wifi_drv.cpp' => ' -Wno-type-limits -Wno-extra -Wno-undef',
+			'Stream.cpp' => ' -Wno-write-strings',
+			'hooks.c' => ' -Wno-strict-prototypes -Wno-old-style-definition',
+			'acilib.cpp' => ' -Wno-switch',
+			'lib_aci.cpp' => ' -Wno-missing-declarations',
+			'RBL_nRF8001.cpp' => ' -Wno-missing-declarations -Wno-switch',
 		}
 
-		@SOURCES = idirs
-		@EXTRA_INCLUDES = BASIC_ARDUINO_IDIRS
+		if(@GCC_V4_SUB >= 8)
+			@SPECIFIC_CFLAGS['RBL_nRF8001.cpp'] += ' -Wno-missing-declarations -Wno-switch -Wno-suggest-attribute=noreturn'
+		else
+			@SPECIFIC_CFLAGS['RBL_nRF8001.cpp'] += ' -Wno-error'
+			@SPECIFIC_CFLAGS['hal_aci_tl.cpp'] = ' -Wno-error'
+		end
+
+		@SOURCES = idirs + utils
+		@EXTRA_INCLUDES = BASIC_ARDUINO_IDIRS + idirs
 
 		@EXTRA_LINKFLAGS = ' -Os -Wl,--gc-sections -mmcu=atmega328p'
-		super
+		end
 		# Once this object is properly constructed, we can create the ones that depend on it.
 		elf = self
 		ShellTask.new(@BUILDDIR+NAME+'.eep', [elf],
@@ -227,4 +281,8 @@ target :run do
 		" -V -patmega328p -carduino -P\\\\.\\#{selectComPort} -b115200 -D \"-Uflash:w:#{work.hexFile}:i\""
 end
 
-Works.run
+oldDir = Dir.pwd
+# This is required to access the cygwin dll files in Arduino 1.5.
+Dir.chdir(ARDUINO_SDK_DIR)
+	Works.run
+Dir.chdir(oldDir)
