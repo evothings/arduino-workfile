@@ -23,6 +23,7 @@ def get_gcc_version_info(gcc)
 	if(!info[:ver])
 		open("|\"#{gcc}\" -dumpversion 2>&1") do |file|
 			info[:ver] = file.read.strip
+			info[:ver] = nil if(info[:ver].length == 0)
 		end
 	end
 	if(!info[:ver])
