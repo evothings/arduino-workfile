@@ -96,8 +96,8 @@ def arduinoIncludeDirctories
 			# search roots.
 			if(!found)
 				roots.each do |root|
-					nen = File.basename(include, File.extname(include))
-					idir = root+'/'+nen
+					extensionlessName = File.basename(include, File.extname(include))
+					idir = root+'/'+extensionlessName
 					if(File.exist?(idir) && File.exist?(idir+'/'+include))
 						found = true
 						puts "Found <#{include}> in #{idir}"
@@ -161,6 +161,13 @@ class ArduinoWork < ExeWork
 			'wiring.c' => ' -Wno-old-style-definition',
 			'wiring_digital.c' => ' -Wno-declaration-after-statement',
 			'Dns.cpp' => ' -Wno-shadow',
+			'WiFi.cpp' => ' -Wno-shadow -Wno-undef',
+			'WiFiClient.cpp' => ' -Wno-undef',
+			'WiFiServer.cpp' => ' -Wno-shadow -Wno-undef',
+			'WiFiUdp.cpp' => ' -Wno-shadow -Wno-undef',
+			'server_drv.cpp' => ' -Wno-undef',
+			'spi_drv.cpp' => ' -Wno-missing-declarations -Wno-undef -Wno-error',
+			'wifi_drv.cpp' => ' -Wno-type-limits -Wno-extra -Wno-undef',
 		}
 
 		@SOURCES = idirs
