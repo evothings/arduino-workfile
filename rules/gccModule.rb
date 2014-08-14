@@ -25,6 +25,8 @@ def get_gcc_version_info(gcc)
 			info[:ver] = file.read.strip
 			info[:ver] = nil if(info[:ver].length == 0)
 		end
+		# Shell may sprout garbage. Make sure process exited without error.
+		info[:ver] = nil if(!$?.success?)
 	end
 	if(!info[:ver])
 		puts gcc
