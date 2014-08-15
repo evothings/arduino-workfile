@@ -116,13 +116,14 @@ else
 	error "wrong configuration: #{@CONFIG}"
 end
 
+target_cflags = ''
 if(@TARGET_PLATFORM == :win32)
 	target_flags = ' -DWIN32'
 	target_cppflags = ''
 elsif(@TARGET_PLATFORM == :arduino)
-	target_flags = ' -fno-exceptions -ffunction-sections -fdata-sections'+
-		' -mmcu=atmega328p -DF_CPU=16000000L -MMD -DUSB_VID=null -DUSB_PID=null -DARDUINO=105'
-	target_cppflags = ''
+	target_flags = moduleTargetFlags
+	target_cflags = moduleTargetCFlags
+	target_cppflags = moduleTargetCppFlags
 elsif(@TARGET_PLATFORM == :linux)
 	target_flags = ' -DLINUX -fPIC'
 	target_cppflags = ''
@@ -157,7 +158,7 @@ end
 cppflags_base = cpp_flags + no_rtti + flags_base + end_flags
 # -Wno-deprecated
 
-@CFLAGS = cflags_base + target_flags + @EXTRA_CFLAGS
+@CFLAGS = cflags_base + target_flags + target_cflags + @EXTRA_CFLAGS
 @CPPFLAGS = cppflags_base + target_flags + target_cppflags + @EXTRA_CPPFLAGS
 end
 end

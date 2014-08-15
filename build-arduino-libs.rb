@@ -14,6 +14,11 @@ LIB_ROOT_DIRS.each do |root|
 	end
 end
 
+LIBSAM = ARDUINO_SDK_DIR+'hardware/arduino/sam/system/libsam'
+if(ARDUINO_ARCHITECTURE.start_with?('sam'))
+	libDirs << LIBSAM
+end
+
 works = []
 libDirs.each do |path|
 	# read library.properties, check that "architectures" matches.
@@ -36,7 +41,7 @@ libDirs.each do |path|
 						break
 					end
 					architectureMatches = false
-					p path, la
+					#p path, la
 				end
 			end
 		end
@@ -59,13 +64,20 @@ libDirs.each do |path|
 	if(name == 'SpacebrewYun')
 		next unless(ARDUINO_VARIANT == 'yun')
 	end
+	# Undocumented limitation: BLE libs require avr headers.
+	if((name == 'RBL_nRF8001' || name == 'BLE'))
+		next unless(ARDUINO_ARCHITECTURE.start_with?('avr'))
+	end
 
 	works << ArduinoLibWork.new do
 		@NAME = name
-		@BUILDDIR_PREFIX = ARDUINO_ARCHITECTURE+name+'/'
+		@BUILDDIR_PREFIX = ARDUINO_ARCHITECTURE+ARDUINO_VARIANT+'/'+name+'/'
 		#p name
 
 		src = path+'/src'
+		if(!Dir.exist?(src))
+			src = path+'/source'
+		end
 		if(!Dir.exist?(src))
 			src = path
 		end
@@ -98,17 +110,21 @@ libDirs.each do |path|
 		end
 
 		# hard-coded extras
-		if(ARDUINO_ARCHITECTURE.start_with?('avr'))
-			@EXTRA_CPPFLAGS << ' -DARDUINO_ARCH_AVR'
-		end
-
 		if(name == 'RBL_nRF8001')
 			@EXTRA_INCLUDES << ARDUINO_LIB_DIR+'BLE'
+		end
+		if(name == 'libsam')
+			@EXTRA_INCLUDES << path+'/include'
+			@SPECIFIC_CFLAGS = {
+				'emac.c' => ' -Wno-maybe-uninitialized',	# compiler bug
+			}
 		end
 	end
 end
 
 # todo: test every architecture and variant.
 # make sure every library is compiled at least once.
+
+# todo: build every example.
 
 runArduinoWorks

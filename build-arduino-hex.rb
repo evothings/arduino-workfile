@@ -5,7 +5,7 @@
 
 require './arduino-shared.rb'
 
-work = ArduinoWork.new
+work = ArduinoHexWork.new
 
 target :run do
 	runAvrdude

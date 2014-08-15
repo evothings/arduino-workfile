@@ -17,6 +17,8 @@ require './localConfig.rb'
 	:ARDUINO_SDK_DIR,
 	:ARDUINO_LIB_DIR,
 	:ARDUINO_COM_PORT,
+	:ARDUINO_VARIANT,
+	:ARDUINO_ARCHITECTURE,
 ].each do |const|
 	if(!Module.const_defined?(const))
 		raise "localConfig.rb must define #{const}"
@@ -171,8 +173,17 @@ end
 
 module ArduinoCompilerModule
 	include GccCompilerModule
+	def toolPrefix
+		if(ARDUINO_ARCHITECTURE == '' || ARDUINO_ARCHITECTURE.start_with?('avr'))
+			return 'avr/bin/avr-'
+		elsif(ARDUINO_ARCHITECTURE.start_with?('sam'))
+			return 'gcc-arm-none-eabi-4.8.3-2014q1/bin/arm-none-eabi-'
+		else
+			raise 'Unhandled architecture: '+ARDUINO_ARCHITECTURE
+		end
+	end
 	def gcc
-		ARDUINO_TOOLS_DIR+'avr/bin/avr-gcc'
+		ARDUINO_TOOLS_DIR+toolPrefix+'gcc'
 	end
 	alias old_setCompilerVersion setCompilerVersion
 	def setCompilerVersion
@@ -184,7 +195,28 @@ module ArduinoCompilerModule
 		Dir.chdir(oldDir)
 	end
 	def linkerName
-		ARDUINO_TOOLS_DIR+'avr/bin/avr-gcc'
+		ARDUINO_TOOLS_DIR+toolPrefix+'gcc'
+	end
+	def objCopyName
+		ARDUINO_TOOLS_DIR+toolPrefix+'objcopy'
+	end
+	def moduleTargetFlags
+		if(ARDUINO_ARCHITECTURE == '' || ARDUINO_ARCHITECTURE.start_with?('avr'))
+			return ' -fno-exceptions -ffunction-sections -fdata-sections'+
+				' -mmcu=atmega328p -DF_CPU=16000000L -MMD -DUSB_VID=null -DUSB_PID=null -DARDUINO=105 -DARDUINO_ARCH_AVR'
+		elsif(ARDUINO_ARCHITECTURE.start_with?('sam'))
+			return ' -ffunction-sections -fdata-sections -nostdlib --param max-inline-insns-single=500 -fno-exceptions'+
+				' -Dprintf=iprintf -mcpu=cortex-m3 -DF_CPU=84000000L -DARDUINO=157 -DARDUINO_SAM_DUE -DARDUINO_ARCH_SAM -D__SAM3X8E__ -mthumb'+
+				' -DUSB_VID=0x2341 -DUSB_PID=0x003e -DUSBCON -DUSB_MANUFACTURER="Unknown" -DUSB_PRODUCT="Arduino Due"'
+		else
+			raise 'Unhandled architecture: '+ARDUINO_ARCHITECTURE
+		end
+	end
+	def moduleTargetCFlags
+		' -Wno-c++-compat'
+	end
+	def moduleTargetCppFlags
+		' -fno-rtti'
 	end
 end
 
@@ -194,7 +226,17 @@ def idirFlags(idirs)
 	idirs.reject {|dir| BASIC_ARDUINO_IDIRS.include?(dir)}.collect {|dir| " -I\""+File.expand_path_fix(dir)+'"'}.join
 end
 
-class ArduinoWork < ExeWork
+def arduinoBasicIncludeDirs
+	a = BASIC_ARDUINO_IDIRS.clone
+	if(ARDUINO_ARCHITECTURE.start_with?('sam'))
+		a << LIBSAM
+		a << ARDUINO_SDK_DIR+'hardware/arduino/sam/system/CMSIS/Device/ATMEL'
+		a << ARDUINO_SDK_DIR+'hardware/arduino/sam/system/CMSIS/CMSIS/Include'
+	end
+	return a
+end
+
+class ArduinoHexWork < ExeWork
 	def initialize
 		@TARGET_PLATFORM = :arduino
 		super(ArduinoCompilerModule) do
@@ -207,17 +249,17 @@ class ArduinoWork < ExeWork
 		}
 
 		@SOURCES = idirs + utils
-		@EXTRA_INCLUDES = BASIC_ARDUINO_IDIRS + idirs
+		@EXTRA_INCLUDES = arduinoBasicIncludeDirs + idirs
 
 		@EXTRA_LINKFLAGS = ' -Os -Wl,--gc-sections -mmcu=atmega328p'
 		end
 		# Once this object is properly constructed, we can create the ones that depend on it.
 		elf = self
 		ShellTask.new(@BUILDDIR+NAME+'.eep', [elf],
-			"\"#{ARDUINO_TOOLS_DIR}avr/bin/avr-objcopy\" -O ihex -j .eeprom --set-section-flags=.eeprom=alloc,load"+
+			"\"#{objCopyName}\" -O ihex -j .eeprom --set-section-flags=.eeprom=alloc,load"+
 			" --no-change-warnings --change-section-lma .eeprom=0 \"#{elf}\" \"#{@BUILDDIR+NAME+'.eep'}\"")
 		@hexFile = ShellTask.new(@BUILDDIR+NAME+'.hex', [elf],
-			"\"#{ARDUINO_TOOLS_DIR}avr/bin/avr-objcopy\" -O ihex -R .eeprom \"#{elf}\" \"#{@BUILDDIR+NAME+'.hex'}\"")
+			"\"#{objCopyName}\" -O ihex -R .eeprom \"#{elf}\" \"#{@BUILDDIR+NAME+'.hex'}\"")
 	end
 	def hexFile
 		@hexFile
@@ -230,7 +272,7 @@ end
 class ArduinoLibWork < LibWork
 	def initialize(&block)
 		@TARGET_PLATFORM = :arduino
-		@EXTRA_INCLUDES = BASIC_ARDUINO_IDIRS
+		@EXTRA_INCLUDES = arduinoBasicIncludeDirs
 		super(ArduinoCompilerModule, &block)
 	end
 end
