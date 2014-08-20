@@ -1,9 +1,20 @@
-if(true)	# 1.0.5
+ARDUINO_VERSION = :git
+#ARDUINO_VERSION = 105
+#ARDUINO_VERSION = 157
+
+case ARDUINO_VERSION
+when :git
+	ARDUINO_SDK_DIR = 'c:/code/ext/Arduino/'
+	ARDUINO_ARCHITECTURE_DIR = 'avr/'
+when 105
 	ARDUINO_SDK_DIR = 'c:/Program Files (x86)/Arduino/'
-	ARDUINO_ARCHITECTURE = ''
-else	# 1.5.x
+	ARDUINO_ARCHITECTURE_DIR = ''
+when 157
 	ARDUINO_SDK_DIR = 'c:/Programs/arduino-1.5.7/'
-	ARDUINO_ARCHITECTURE = 'avr/'
+	ARDUINO_ARCHITECTURE_DIR = 'avr/'
 end
+
 ARDUINO_LIB_DIR = 'c:/Users/foobar/Documents/Arduino/libraries/'
 ARDUINO_COM_PORT = :default
+ARDUINO_CYGWIN_DIR = 'c:/Programs/arduino-1.5.7/'
+ARDUINO_VARIANT = 'standard'

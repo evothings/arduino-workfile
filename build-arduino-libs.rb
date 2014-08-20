@@ -11,11 +11,10 @@ LIB_ROOT_DIRS.each do |root|
 		if(Dir.exist?(root+dir) && !dir.start_with?('.'))
 			libDirs << root+dir
 		end
-	end
+	end if(Dir.exist?(root))
 end
 
-LIBSAM = ARDUINO_SDK_DIR+'hardware/arduino/sam/system/libsam'
-if(ARDUINO_ARCHITECTURE.start_with?('sam'))
+if(ARDUINO_ARCHITECTURE == :sam)
 	libDirs << LIBSAM
 end
 
@@ -36,7 +35,7 @@ libDirs.each do |path|
 						raise hell if(libArches.length != 1)
 						break
 					end
-					if(ARDUINO_ARCHITECTURE.start_with?(la))
+					if(ARDUINO_ARCHITECTURE == la.to_sym)
 						architectureMatches = true
 						break
 					end
@@ -66,12 +65,12 @@ libDirs.each do |path|
 	end
 	# Undocumented limitation: BLE libs require avr headers.
 	if((name == 'RBL_nRF8001' || name == 'BLE'))
-		next unless(ARDUINO_ARCHITECTURE.start_with?('avr'))
+		next unless(ARDUINO_ARCHITECTURE == :avr)
 	end
 
 	works << ArduinoLibWork.new do
 		@NAME = name
-		@BUILDDIR_PREFIX = ARDUINO_ARCHITECTURE+ARDUINO_VARIANT+'/'+name+'/'
+		@BUILDDIR_PREFIX = ARDUINO_ARCHITECTURE_DIR+ARDUINO_VARIANT+'/'+name+'/'
 		#p name
 
 		src = path+'/src'
@@ -86,7 +85,7 @@ libDirs.each do |path|
 		util = src+'/utility'
 		@SOURCES << util if(Dir.exist?(util))
 
-		arch = src+'/'+ARDUINO_ARCHITECTURE
+		arch = src+'/'+ARDUINO_ARCHITECTURE.to_s
 		@SOURCES << arch if(Dir.exist?(arch))
 
 		@EXTRA_INCLUDES += @SOURCES
@@ -105,7 +104,7 @@ libDirs.each do |path|
 		libs = coreDependencies[name]
 		if(libs)
 			libs.each do |lib|
-				@EXTRA_INCLUDES << ARDUINO_SDK_DIR+'hardware/arduino/'+ARDUINO_ARCHITECTURE+'libraries/'+lib
+				@EXTRA_INCLUDES << ARDUINO_SDK_DIR+'hardware/arduino/'+ARDUINO_ARCHITECTURE_DIR+'libraries/'+lib
 			end
 		end
 

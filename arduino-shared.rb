@@ -18,12 +18,25 @@ require './localConfig.rb'
 	:ARDUINO_LIB_DIR,
 	:ARDUINO_COM_PORT,
 	:ARDUINO_VARIANT,
-	:ARDUINO_ARCHITECTURE,
+	:ARDUINO_ARCHITECTURE_DIR,
 ].each do |const|
 	if(!Module.const_defined?(const))
 		raise "localConfig.rb must define #{const}"
 	end
 end
+
+def archFromDir
+	case(ARDUINO_ARCHITECTURE_DIR)
+		when '', 'avr/'
+			return :avr
+		when 'sam/'
+			return :sam
+		else
+			raise 'Unhandled architecture: '+ARDUINO_ARCHITECTURE_DIR
+	end
+end
+
+ARDUINO_ARCHITECTURE = archFromDir
 
 if(!defined?(ARDUINO_CYGWIN_DIR))
 	ARDUINO_CYGWIN_DIR = ARDUINO_SDK_DIR
@@ -68,15 +81,15 @@ def genArduinoSourceTasks
 	return [ArduinoSourceTask.new]
 end
 
-ARDUINO_CORE_DIR = ARDUINO_SDK_DIR+'hardware/arduino/'+ARDUINO_ARCHITECTURE+'cores/arduino'
+ARDUINO_CORE_DIR = ARDUINO_SDK_DIR+'hardware/arduino/'+ARDUINO_ARCHITECTURE_DIR+'cores/arduino'
 
 BASIC_ARDUINO_IDIRS = [
 	ARDUINO_CORE_DIR,
-	ARDUINO_SDK_DIR+'hardware/arduino/'+ARDUINO_ARCHITECTURE+'variants/'+ARDUINO_VARIANT,
+	ARDUINO_SDK_DIR+'hardware/arduino/'+ARDUINO_ARCHITECTURE_DIR+'variants/'+ARDUINO_VARIANT,
 ]
 
 LIB_ROOT_DIRS = [
-	ARDUINO_SDK_DIR+'hardware/arduino/'+ARDUINO_ARCHITECTURE+'libraries/',
+	ARDUINO_SDK_DIR+'hardware/arduino/'+ARDUINO_ARCHITECTURE_DIR+'libraries/',
 	ARDUINO_SDK_DIR+'libraries/',
 	ARDUINO_LIB_DIR,
 ]
@@ -174,9 +187,9 @@ end
 module ArduinoCompilerModule
 	include GccCompilerModule
 	def toolPrefix
-		if(ARDUINO_ARCHITECTURE == '' || ARDUINO_ARCHITECTURE.start_with?('avr'))
+		if(ARDUINO_ARCHITECTURE == :avr)
 			return 'avr/bin/avr-'
-		elsif(ARDUINO_ARCHITECTURE.start_with?('sam'))
+		elsif(ARDUINO_ARCHITECTURE == :sam)
 			return 'gcc-arm-none-eabi-4.8.3-2014q1/bin/arm-none-eabi-'
 		else
 			raise 'Unhandled architecture: '+ARDUINO_ARCHITECTURE
@@ -201,10 +214,10 @@ module ArduinoCompilerModule
 		ARDUINO_TOOLS_DIR+toolPrefix+'objcopy'
 	end
 	def moduleTargetFlags
-		if(ARDUINO_ARCHITECTURE == '' || ARDUINO_ARCHITECTURE.start_with?('avr'))
+		if(ARDUINO_ARCHITECTURE == :avr)
 			return ' -fno-exceptions -ffunction-sections -fdata-sections'+
 				' -mmcu=atmega328p -DF_CPU=16000000L -MMD -DUSB_VID=null -DUSB_PID=null -DARDUINO=105 -DARDUINO_ARCH_AVR'
-		elsif(ARDUINO_ARCHITECTURE.start_with?('sam'))
+		elsif(ARDUINO_ARCHITECTURE == :sam)
 			return ' -ffunction-sections -fdata-sections -nostdlib --param max-inline-insns-single=500 -fno-exceptions'+
 				' -Dprintf=iprintf -mcpu=cortex-m3 -DF_CPU=84000000L -DARDUINO=157 -DARDUINO_SAM_DUE -DARDUINO_ARCH_SAM -D__SAM3X8E__ -mthumb'+
 				' -DUSB_VID=0x2341 -DUSB_PID=0x003e -DUSBCON -DUSB_MANUFACTURER="Unknown" -DUSB_PRODUCT="Arduino Due"'
@@ -226,9 +239,11 @@ def idirFlags(idirs)
 	idirs.reject {|dir| BASIC_ARDUINO_IDIRS.include?(dir)}.collect {|dir| " -I\""+File.expand_path_fix(dir)+'"'}.join
 end
 
+LIBSAM = ARDUINO_SDK_DIR+'hardware/arduino/sam/system/libsam'
+
 def arduinoBasicIncludeDirs
 	a = BASIC_ARDUINO_IDIRS.clone
-	if(ARDUINO_ARCHITECTURE.start_with?('sam'))
+	if(ARDUINO_ARCHITECTURE == :sam)
 		a << LIBSAM
 		a << ARDUINO_SDK_DIR+'hardware/arduino/sam/system/CMSIS/Device/ATMEL'
 		a << ARDUINO_SDK_DIR+'hardware/arduino/sam/system/CMSIS/CMSIS/Include'
@@ -306,8 +321,8 @@ def selectComPort
 	end
 end
 
-def runAvrdude
-	sh "\"#{ARDUINO_TOOLS_DIR}avr/bin/avrdude\" \"-C#{ARDUINO_SDK_DIR}hardware/tools/avr/etc/avrdude.conf\""+
+def runAvrdude(work)
+	sh "\"#{ARDUINO_TOOLS_DIR}avr/bin/avrdude\" \"-C#{ARDUINO_TOOLS_DIR}avr/etc/avrdude.conf\""+
 		" -V -patmega328p -carduino -P\\\\.\\#{selectComPort} -b115200 -D \"-Uflash:w:#{work.hexFile}:i\""
 end
 

@@ -8,7 +8,7 @@ require './arduino-shared.rb'
 work = ArduinoHexWork.new
 
 target :run do
-	runAvrdude
+	runAvrdude(work)
 end
 
 runArduinoWorks
