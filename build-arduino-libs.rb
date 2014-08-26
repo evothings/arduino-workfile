@@ -1,12 +1,20 @@
 #!/usr/bin/ruby
 
-# This program builds the Arduino project in the Current Working Directory.
-# If the first argument is an existing directory, it is used instead of the CWD.
+# This program builds all Arduino libraries.
 
-require './arduino-shared.rb'
+# todo: test every architecture and variant.
+# make sure every library is compiled at least once.
 
-libDirs = [ARDUINO_CORE_DIR]
-LIB_ROOT_DIRS.each do |root|
+# todo: build every example.
+
+require File.dirname(File.expand_path __FILE__)+'/arduino-shared.rb'
+
+DefaultArduinoEnvironment.extend_to(self)
+
+#p self.singleton_class.constants
+
+libDirs = [@ARDUINO_CORE_DIR]
+@LIB_ROOT_DIRS.each do |root|
 	Dir.foreach(root) do |dir|
 		if(Dir.exist?(root+dir) && !dir.start_with?('.'))
 			libDirs << root+dir
@@ -14,8 +22,8 @@ LIB_ROOT_DIRS.each do |root|
 	end if(Dir.exist?(root))
 end
 
-if(ARDUINO_ARCHITECTURE == :sam)
-	libDirs << LIBSAM
+if(@ARDUINO_ARCHITECTURE == :sam)
+	libDirs << @LIBSAM
 end
 
 works = []
@@ -35,7 +43,7 @@ libDirs.each do |path|
 						raise hell if(libArches.length != 1)
 						break
 					end
-					if(ARDUINO_ARCHITECTURE == la.to_sym)
+					if(@ARDUINO_ARCHITECTURE == la.to_sym)
 						architectureMatches = true
 						break
 					end
@@ -52,25 +60,25 @@ libDirs.each do |path|
 	name = File.basename(path)
 	if(name == 'Esplora')
 		# Esplora requires pin A11, available only on these variants.
-		next unless(ARDUINO_VARIANT == 'mega' || ARDUINO_VARIANT == 'leonardo')
+		next unless(@ARDUINO_VARIANT == 'mega' || @ARDUINO_VARIANT == 'leonardo')
 	end
 	if(name == 'RobotIRremote' || name == 'Robot_Control')
-		next unless(ARDUINO_VARIANT == 'robot_control')
+		next unless(@ARDUINO_VARIANT == 'robot_control')
 	end
 	if(name == 'Robot_Motor')
-		next unless(ARDUINO_VARIANT == 'robot_motor')
+		next unless(@ARDUINO_VARIANT == 'robot_motor')
 	end
 	if(name == 'SpacebrewYun')
-		next unless(ARDUINO_VARIANT == 'yun')
+		next unless(@ARDUINO_VARIANT == 'yun')
 	end
 	# Undocumented limitation: BLE libs require avr headers.
 	if((name == 'RBL_nRF8001' || name == 'BLE'))
-		next unless(ARDUINO_ARCHITECTURE == :avr)
+		next unless(@ARDUINO_ARCHITECTURE == :avr)
 	end
 
-	works << ArduinoLibWork.new do
+	works << ArduinoEnvironment::ArduinoLibWork.new do
 		@NAME = name
-		@BUILDDIR_PREFIX = ARDUINO_ARCHITECTURE_DIR+ARDUINO_VARIANT+'/'+name+'/'
+		@BUILDDIR_PREFIX = @ARDUINO_ARCHITECTURE_DIR+@ARDUINO_VARIANT+'/'+name+'/'
 		#p name
 
 		src = path+'/src'
@@ -85,7 +93,7 @@ libDirs.each do |path|
 		util = src+'/utility'
 		@SOURCES << util if(Dir.exist?(util))
 
-		arch = src+'/'+ARDUINO_ARCHITECTURE.to_s
+		arch = src+'/'+@ARDUINO_ARCHITECTURE.to_s
 		@SOURCES << arch if(Dir.exist?(arch))
 
 		@EXTRA_INCLUDES += @SOURCES
@@ -104,13 +112,13 @@ libDirs.each do |path|
 		libs = coreDependencies[name]
 		if(libs)
 			libs.each do |lib|
-				@EXTRA_INCLUDES << ARDUINO_SDK_DIR+'hardware/arduino/'+ARDUINO_ARCHITECTURE_DIR+'libraries/'+lib
+				@EXTRA_INCLUDES << @ARDUINO_SDK_DIR+'hardware/arduino/'+@ARDUINO_ARCHITECTURE_DIR+'libraries/'+lib
 			end
 		end
 
 		# hard-coded extras
 		if(name == 'RBL_nRF8001')
-			@EXTRA_INCLUDES << ARDUINO_LIB_DIR+'BLE'
+			@EXTRA_INCLUDES << @ARDUINO_LIB_DIR+'BLE'
 		end
 		if(name == 'libsam')
 			@EXTRA_INCLUDES << path+'/include'
@@ -120,10 +128,5 @@ libDirs.each do |path|
 		end
 	end
 end
-
-# todo: test every architecture and variant.
-# make sure every library is compiled at least once.
-
-# todo: build every example.
 
 runArduinoWorks
