@@ -333,10 +333,10 @@ class ArduinoHexWork < ExeWork
 
 		idirs, utils, @PATTERN_CFLAGS = arduinoIncludeDirctories(inoFileName)
 		@SPECIFIC_CFLAGS = {
-			NAME+'.ino.cpp' => idirFlags(idirs),
+			NAME+'.ino.cpp' => idirFlags(idirs + [Dir.pwd]),
 		}
 
-		@SOURCES = idirs + utils
+		@SOURCES = idirs + utils + [Dir.pwd]
 		@EXTRA_INCLUDES = arduinoBasicIncludeDirs + idirs
 
 		@EXTRA_LINKFLAGS = ' -Os -Wl,--gc-sections -mmcu=atmega328p'
