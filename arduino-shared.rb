@@ -13,20 +13,27 @@ require 'win32/registry'
 require File.expand_path(selfDir+'/rules/cExe.rb')
 require File.expand_path(selfDir+'/rules/cLib.rb')
 require File.expand_path(selfDir+'/preprocess.rb')
+require File.expand_path(selfDir+'/arduino-boards.rb')
 require File.expand_path(selfDir+'/localConfig.rb')
+
+# todo: don't read variant, read board.
+# then read boards.txt to find variant and other variables.
 
 class ArduinoEnvironment
 REQUIRED_OPTIONS = [
 	:ARDUINO_SDK_DIR,
 	:ARDUINO_LIB_DIR,
 	:ARDUINO_COM_PORT,
-	:ARDUINO_VARIANT,
+	:ARDUINO_BOARD,
 	:ARDUINO_ARCHITECTURE_DIR,
 ]
 ALLOWED_OPTIONS = [
 	:ARDUINO_CYGWIN_DIR,
 	:ARDUINO_TOOLS_DIR,
 ]
+# key: string, architecture_dir
+# value: BoardObject, result of parseBoardsTxt
+@@boards = {}
 def initialize(options)
 	REQUIRED_OPTIONS.each do |key|
 		if(!options[key])
@@ -41,6 +48,19 @@ def initialize(options)
 			raise "ArduinoEnvironment options does not allow #{key}"
 		end
 	end
+
+	if(!@@boards[@ARDUINO_ARCHITECTURE_DIR])
+		fn = @ARDUINO_SDK_DIR+'hardware/arduino/'+@ARDUINO_ARCHITECTURE_DIR+'boards.txt'
+		puts "Parsing #{fn}"
+		@@boards[@ARDUINO_ARCHITECTURE_DIR] = parseBoardsTxt(fn)
+	end
+	boards = @@boards[@ARDUINO_ARCHITECTURE_DIR]
+
+	@ARDUINO_VARIANT = boards.send(@ARDUINO_BOARD).build.variant.to_s
+	if(!@ARDUINO_VARIANT)
+		raise "#{@ARDUINO_BOARD}.build.variant missing!"
+	end
+	@board = boards.send(@ARDUINO_BOARD)
 
 	@ARDUINO_ARCHITECTURE = archFromDir
 
@@ -305,13 +325,17 @@ module ArduinoCompilerModule
 		@ARDUINO_TOOLS_DIR+toolPrefix+'objcopy'
 	end
 	def moduleTargetFlags
+		build = @board.build
 		if(@ARDUINO_ARCHITECTURE == :avr)
-			return ' -fno-exceptions -ffunction-sections -fdata-sections'+
-				' -mmcu=atmega328p -DF_CPU=16000000L -MMD -DUSB_VID=null -DUSB_PID=null -DARDUINO=105 -DARDUINO_ARCH_AVR'
+			return " -fno-exceptions -ffunction-sections -fdata-sections"+
+				" -mmcu=#{build.mcu} -DF_CPU=#{build.f_cpu} -MMD -DUSB_VID=#{build.vid} -DUSB_PID=#{build.pid}"+
+				" -DARDUINO=157 -DARDUINO_ARCH_AVR -DARDUINO_#{build.board} "+
+				build.extra_flags.to_s.gsub("{build.usb_flags}", "")
 		elsif(@ARDUINO_ARCHITECTURE == :sam)
-			return ' -ffunction-sections -fdata-sections -nostdlib --param max-inline-insns-single=500 -fno-exceptions'+
-				' -Dprintf=iprintf -mcpu=cortex-m3 -DF_CPU=84000000L -DARDUINO=157 -DARDUINO_SAM_DUE -DARDUINO_ARCH_SAM -D__SAM3X8E__ -mthumb'+
-				' -DUSB_VID=0x2341 -DUSB_PID=0x003e -DUSBCON -DUSB_MANUFACTURER="Unknown" -DUSB_PRODUCT="Arduino Due"'
+			return " -ffunction-sections -fdata-sections -nostdlib --param max-inline-insns-single=500 -fno-exceptions"+
+				" -Dprintf=iprintf -mcpu=#{build.mcu} -DF_CPU=#{build.f_cpu} -DARDUINO=157 -DARDUINO_#{build.board} "+
+				" -DARDUINO_ARCH_SAM "+build.extra_flags.to_s.gsub("{build.usb_flags}", "")+
+				" -DUSB_VID=#{build.vid} -DUSB_PID=#{build.pid} -DUSBCON -DUSB_MANUFACTURER=\"Unknown\" -DUSB_PRODUCT=#{build.usb_product}"
 		else
 			raise 'Unhandled architecture: '+@ARDUINO_ARCHITECTURE
 		end
@@ -334,6 +358,7 @@ class ArduinoHexWork < ExeWork
 		idirs, utils, @PATTERN_CFLAGS = arduinoIncludeDirctories(inoFileName)
 		@SPECIFIC_CFLAGS = {
 			NAME+'.ino.cpp' => idirFlags(idirs + [Dir.pwd]),
+			#'evocrypt.cpp' => ' -O2',
 		}
 
 		@SOURCES = idirs + utils + [Dir.pwd]
@@ -364,7 +389,6 @@ class ArduinoHexWork < ExeWork
 	def genArduinoSourceTasks
 		return [ArduinoSourceTask.new(inoFileName)]
 	end
-
 end
 
 class ArduinoLibWork < LibWork
