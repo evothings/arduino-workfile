@@ -1,11 +1,6 @@
 #!/usr/bin/ruby
 
-# This program builds all Arduino libraries.
-
-# todo: test every architecture and variant.
-# make sure every library is compiled at least once.
-
-# todo: build every example.
+# Common code for building Arduino libraries.
 
 require File.dirname(File.expand_path __FILE__)+'/arduino-shared.rb'
 
@@ -35,8 +30,10 @@ works = []
 libDirs.each do |path|
 	# read library.properties, check that "architectures" matches.
 	architectureMatches = true
+	libDeps = []
 	open(path+'/library.properties') do |file|
 		archLineFound = false
+		depLineFound = false
 		file.each do |line|
 			a = 'architectures='
 			if(line.start_with?(a))
@@ -55,6 +52,12 @@ libDirs.each do |path|
 					architectureMatches = false
 					#p path, la
 				end
+			end
+			a = 'dependencies='
+			if(line.start_with?(a))
+				raise hell if(depLineFound)
+				depLineFound = true
+				libDeps = line[a.length..-1].strip.split(',')
 			end
 		end
 	end if(File.exist?(path+'/library.properties'))
@@ -76,6 +79,14 @@ libDirs.each do |path|
 	if(name == 'SpacebrewYun')
 		next unless(@ARDUINO_VARIANT == 'yun')
 	end
+	if(name == 'GSM')
+		# GSM3SoftSerial.cpp doesn't yet support this CPU.
+		next if(@ARDUINO_MCU == 'atmega168')
+	end
+	if(@ARDUINO_VARIANT == 'robot_control' || @ARDUINO_VARIANT == 'robot_motor')
+		# robot_control/pins_arduino.h doesn't supply digitalPinToPCICR().
+		next if(name == 'SoftwareSerial' || name == 'GSM')
+	end
 	# Undocumented limitation: BLE libs require avr headers.
 	if((name == 'RBL_nRF8001' || name == 'BLE'))
 		next unless(@ARDUINO_ARCHITECTURE == :avr)
@@ -83,7 +94,7 @@ libDirs.each do |path|
 
 	works << ArduinoLibWork.new(@environment) do
 		@NAME = name
-		@BUILDDIR_PREFIX = @ARDUINO_ARCHITECTURE_DIR+@ARDUINO_VARIANT+'/'+name+'/'
+		@BUILDDIR_PREFIX = @ARDUINO_ARCHITECTURE_DIR+@ARDUINO_BOARD+'/'+mcuSubdir+name+'/'
 		#p name
 
 		src = path+'/src'
@@ -119,6 +130,10 @@ libDirs.each do |path|
 			libs.each do |lib|
 				@EXTRA_INCLUDES << @ARDUINO_SDK_DIR+'hardware/arduino/'+@ARDUINO_ARCHITECTURE_DIR+'libraries/'+lib
 			end
+		end
+
+		libDeps.each do |lib|
+			@EXTRA_INCLUDES << @ARDUINO_SDK_DIR+'libraries/'+lib+'/src'
 		end
 
 		# hard-coded extras

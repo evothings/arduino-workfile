@@ -19,6 +19,21 @@ require File.expand_path(selfDir+'/localConfig.rb')
 # todo: don't read variant, read board.
 # then read boards.txt to find variant and other variables.
 
+# Container for parsed boards.txt.
+class ArduinoBoards
+	# key: string, filename
+	# value: BoardObject, result of parseBoardsTxt
+	@@boards = {}
+	def self.[](sdkDir, archDir)
+		fn = sdkDir+'hardware/arduino/'+archDir+'boards.txt'
+		if(!@@boards[fn])
+			puts "Parsing #{fn}"
+			@@boards[fn] = parseBoardsTxt(fn)
+		end
+		return @@boards[fn]
+	end
+end
+
 class ArduinoEnvironment
 REQUIRED_OPTIONS = [
 	:ARDUINO_SDK_DIR,
@@ -28,12 +43,11 @@ REQUIRED_OPTIONS = [
 	:ARDUINO_ARCHITECTURE_DIR,
 ]
 ALLOWED_OPTIONS = [
+	# Used only if BOARD doesn't specify a CPU type.
+	:ARDUINO_CPU,
 	:ARDUINO_CYGWIN_DIR,
 	:ARDUINO_TOOLS_DIR,
 ]
-# key: string, architecture_dir
-# value: BoardObject, result of parseBoardsTxt
-@@boards = {}
 def initialize(options)
 	REQUIRED_OPTIONS.each do |key|
 		if(!options[key])
@@ -49,12 +63,7 @@ def initialize(options)
 		end
 	end
 
-	if(!@@boards[@ARDUINO_ARCHITECTURE_DIR])
-		fn = @ARDUINO_SDK_DIR+'hardware/arduino/'+@ARDUINO_ARCHITECTURE_DIR+'boards.txt'
-		puts "Parsing #{fn}"
-		@@boards[@ARDUINO_ARCHITECTURE_DIR] = parseBoardsTxt(fn)
-	end
-	boards = @@boards[@ARDUINO_ARCHITECTURE_DIR]
+	boards = ArduinoBoards[@ARDUINO_SDK_DIR, @ARDUINO_ARCHITECTURE_DIR]
 
 	@ARDUINO_VARIANT = boards.send(@ARDUINO_BOARD).build.variant.to_s
 	if(!@ARDUINO_VARIANT)
@@ -72,6 +81,28 @@ def initialize(options)
 		@ARDUINO_TOOLS_DIR = @ARDUINO_CYGWIN_DIR+'hardware/tools/'
 	end
 
+	@mcuSubdir = ''
+	mcu = @board.build.mcu
+	fcpu = @board.build.f_cpu
+	mcu = nil if(@board.menu)	# atmegang
+	if(!mcu && @ARDUINO_CPU)
+		build = @board.menu.cpu.send(@ARDUINO_CPU).build
+		mcu = build.mcu
+		@mcuSubdir = @ARDUINO_CPU.to_s+'/'
+		fcpu = build.f_cpu if(build.f_cpu)	# pro
+	end
+	if(!mcu)
+		msg = "build.mcu undefined. You must choose a CPU type."
+		puts msg
+		puts "Available CPU types:"
+		@board.menu.cpu.each do |k,v|
+			puts k.to_s
+		end
+		raise msg
+	end
+	@ARDUINO_MCU = mcu.to_s
+	@ARDUINO_FCPU = fcpu.to_s
+
 	@ARDUINO_CORE_DIR = @ARDUINO_SDK_DIR+'hardware/arduino/'+@ARDUINO_ARCHITECTURE_DIR+'cores/arduino'
 
 	@BASIC_ARDUINO_IDIRS = [
@@ -86,6 +117,10 @@ def initialize(options)
 	]
 
 	@LIBSAM = @ARDUINO_SDK_DIR+'hardware/arduino/sam/system/libsam'
+end
+
+def mcuSubdir
+	@mcuSubdir
 end
 
 def archFromDir
@@ -326,16 +361,17 @@ module ArduinoCompilerModule
 	end
 	def moduleTargetFlags
 		build = @board.build
+		bef = build.extra_flags.to_s.gsub("{build.usb_flags}", "")
+		raise hell if(!@ARDUINO_FCPU)
+		shared = " -fno-exceptions -ffunction-sections -fdata-sections"+
+			" -DF_CPU=#{@ARDUINO_FCPU} -DARDUINO=157 -DARDUINO_#{build.board} "+bef+
+			" -DUSB_VID=#{build.vid} -DUSB_PID=#{build.pid}"
 		if(@ARDUINO_ARCHITECTURE == :avr)
-			return " -fno-exceptions -ffunction-sections -fdata-sections"+
-				" -mmcu=#{build.mcu} -DF_CPU=#{build.f_cpu} -MMD -DUSB_VID=#{build.vid} -DUSB_PID=#{build.pid}"+
-				" -DARDUINO=157 -DARDUINO_ARCH_AVR -DARDUINO_#{build.board} "+
-				build.extra_flags.to_s.gsub("{build.usb_flags}", "")
+			return shared+" -DARDUINO_ARCH_AVR -mmcu=#{@ARDUINO_MCU}"
 		elsif(@ARDUINO_ARCHITECTURE == :sam)
-			return " -ffunction-sections -fdata-sections -nostdlib --param max-inline-insns-single=500 -fno-exceptions"+
-				" -Dprintf=iprintf -mcpu=#{build.mcu} -DF_CPU=#{build.f_cpu} -DARDUINO=157 -DARDUINO_#{build.board} "+
-				" -DARDUINO_ARCH_SAM "+build.extra_flags.to_s.gsub("{build.usb_flags}", "")+
-				" -DUSB_VID=#{build.vid} -DUSB_PID=#{build.pid} -DUSBCON -DUSB_MANUFACTURER=\"Unknown\" -DUSB_PRODUCT=#{build.usb_product}"
+			return shared+" -DARDUINO_ARCH_SAM -mcpu=#{@ARDUINO_MCU} -nostdlib --param max-inline-insns-single=500"+
+				" -Dprintf=iprintf"+
+				"  -DUSBCON -DUSB_MANUFACTURER=\"Unknown\" -DUSB_PRODUCT=#{build.usb_product}"
 		else
 			raise 'Unhandled architecture: '+@ARDUINO_ARCHITECTURE
 		end
