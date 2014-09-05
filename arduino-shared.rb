@@ -205,11 +205,20 @@ def arduinoIncludeDirctories(inoFileName)
 					extensionlessName = File.basename(include, File.extname(include))
 					idir = root+extensionlessName
 					#puts "test #{idir}"
-					if(File.exist?(idir) && File.exist?(idir+'/'+include))
-						found = true
-						puts "Found <#{include}> in #{idir}"
-						addIdir.call(idir)
-						break
+					if(File.exist?(idir))
+						path = idir
+						if(!File.exist?(idir+'/'+include))
+							idir = path+'/src'
+						end
+						if(!File.exist?(idir+'/'+include))
+							idir = path+'/source'
+						end
+						if(File.exist?(idir+'/'+include))
+							found = true
+							puts "Found <#{include}> in #{idir}"
+							addIdir.call(idir)
+							break
+						end
 					end
 				end
 			end
@@ -295,8 +304,9 @@ def selectComPort
 end
 
 def runAvrdude(work)
+	# Insufficient for Leonardo. See SerialUploader.java.
 	sh "\"#{@ARDUINO_TOOLS_DIR}avr/bin/avrdude\" \"-C#{@ARDUINO_TOOLS_DIR}avr/etc/avrdude.conf\""+
-		" -V -patmega328p -carduino -P#{selectComPort} -b115200 -D \"-Uflash:w:#{work.hexFile}:i\""
+		" -V -p#{@ARDUINO_MCU} -c#{@board.upload.protocol} -P#{selectComPort} -b#{@board.upload.speed} -D \"-Uflash:w:#{work.hexFile}:i\""
 end
 
 def runArduinoWorks
@@ -394,13 +404,17 @@ class ArduinoHexWork < ExeWork
 		idirs, utils, @PATTERN_CFLAGS = arduinoIncludeDirctories(inoFileName)
 		@SPECIFIC_CFLAGS = {
 			NAME+'.ino.cpp' => idirFlags(idirs + [Dir.pwd]),
-			#'evocrypt.cpp' => ' -O2',
 		}
 
 		@SOURCES = idirs + utils + [Dir.pwd]
 		@EXTRA_INCLUDES = arduinoBasicIncludeDirs + idirs
 
-		@EXTRA_LINKFLAGS = ' -Os -Wl,--gc-sections -mmcu=atmega328p'
+		if(defined?(SOURCES))
+			@SOURCES += SOURCES
+			@SPECIFIC_CFLAGS[NAME+'.ino.cpp'] += idirFlags(SOURCES)
+		end
+
+		@EXTRA_LINKFLAGS = " -Os -Wl,--gc-sections -mmcu=#{@ARDUINO_MCU}"
 		end
 		# Once this object is properly constructed, we can create the ones that depend on it.
 		elf = self
@@ -409,6 +423,10 @@ class ArduinoHexWork < ExeWork
 			" --no-change-warnings --change-section-lma .eeprom=0 \"#{elf}\" \"#{@BUILDDIR+NAME+'.eep'}\"")
 		@hexFile = ShellTask.new(@BUILDDIR+NAME+'.hex', [elf],
 			"\"#{objCopyName}\" -O ihex -R .eeprom \"#{elf}\" \"#{@BUILDDIR+NAME+'.hex'}\"")
+
+		# TODO: Output amount of used memory.
+		# If a program uses too much memory, it will crash.
+		#ShellTask.new('avr-size', -A, elf)
 	end
 	def hexFile
 		@hexFile
