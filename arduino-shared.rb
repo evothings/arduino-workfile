@@ -16,7 +16,9 @@ require File.expand_path(selfDir+'/preprocess.rb')
 require File.expand_path(selfDir+'/arduino-boards.rb')
 require File.expand_path(selfDir+'/localConfig.rb')
 
-# todo: don't read variant, read board.
+SERIAL_MONITOR_PATH = "#{selfDir}/serial-monitor.rb"
+
+# don't read variant, read board.
 # then read boards.txt to find variant and other variables.
 
 # Container for parsed boards.txt.
@@ -307,6 +309,10 @@ def runAvrdude(work)
 	# Insufficient for Leonardo. See SerialUploader.java.
 	sh "\"#{@ARDUINO_TOOLS_DIR}avr/bin/avrdude\" \"-C#{@ARDUINO_TOOLS_DIR}avr/etc/avrdude.conf\""+
 		" -V -p#{@ARDUINO_MCU} -c#{@board.upload.protocol} -P#{selectComPort} -b#{@board.upload.speed} -D \"-Uflash:w:#{work.hexFile}:i\""
+end
+
+def runSerialMonitor
+	sh "ruby #{SERIAL_MONITOR_PATH} #{selectComPort} 9600"
 end
 
 def runArduinoWorks

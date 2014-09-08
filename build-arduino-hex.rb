@@ -24,6 +24,7 @@ DefaultArduinoEnvironment.extend_to(self)
 
 target :run do
 	runAvrdude(work)
+	runSerialMonitor
 end
 
 runArduinoWorks
