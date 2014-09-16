@@ -42,7 +42,7 @@ def preprocess(program, inoFileName)
 		out.puts(prototype);
 	end
 	lines = program.slice(0, prototypeInsertionPoint).split("\n", -1);
-	out.puts("#line #{(lines.length - 1)}");
+	out.puts("#line #{(lines.length)}");
 	out.write(program.slice(prototypeInsertionPoint .. -1));
 	return out.string
 end

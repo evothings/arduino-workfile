@@ -28,7 +28,10 @@ loop do
 	byte = port.getbyte()
 	if(byte)
 		$stdout.putc(byte)
-	else
 		$stdout.flush
 	end
+#	if($stdin.eof?)
+#		puts "$stdin ended, quitting..."
+#		exit!(0)
+#	end
 end

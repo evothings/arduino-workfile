@@ -3,6 +3,8 @@
 # This program builds the Arduino project in the Current Working Directory.
 # If the first argument is an existing directory, it is used instead of the CWD.
 
+require File.dirname(File.expand_path __FILE__)+'/rules/work.rb'
+
 as = File.dirname(File.expand_path __FILE__)+'/arduino-shared.rb'
 
 if(ARGV[0] && Dir.exist?(ARGV[0]))

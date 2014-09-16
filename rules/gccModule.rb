@@ -114,7 +114,8 @@ public
 			'.cpp' => @CPPFLAGS,
 			'.cc' => @CPPFLAGS,
 			'.C' => @CPPFLAGS,
-			'.s' => ' -Wa,--gstabs',
+			'.s' => ' -Wa,--gstabs' + @CFLAGS,
+			'.S' => ' -Wa,--gstabs' + @CFLAGS,
 		}
 	end
 
@@ -132,7 +133,7 @@ public
 	end
 
 	def postCompile
-		if(!File.exist?(@TEMPDEPFILE) && @SOURCE.to_s.getExt == '.s')
+		if(!File.exist?(@TEMPDEPFILE) && @SOURCE.to_s.getExt.downcase == '.s')
 			# Some .s files generate no dependency file when compiled.
 			FileUtils.touch(@DEPFILE)
 			return

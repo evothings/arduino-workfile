@@ -312,7 +312,7 @@ def runAvrdude(work)
 end
 
 def runSerialMonitor
-	sh "ruby #{SERIAL_MONITOR_PATH} #{selectComPort} 9600"
+	sh "start cmd /C ruby #{SERIAL_MONITOR_PATH} #{selectComPort} 9600"
 end
 
 def runArduinoWorks
@@ -396,7 +396,7 @@ module ArduinoCompilerModule
 		' -Wno-c++-compat'
 	end
 	def moduleTargetCppFlags
-		' -fno-rtti'
+		' -fno-rtti -std=c++0x'
 	end
 end
 
@@ -418,6 +418,10 @@ class ArduinoHexWork < ExeWork
 		if(defined?(SOURCES))
 			@SOURCES += SOURCES
 			@SPECIFIC_CFLAGS[NAME+'.ino.cpp'] += idirFlags(SOURCES)
+		end
+
+		if(defined?(SOURCE_TASKS))
+			@SOURCE_TASKS += SOURCE_TASKS
 		end
 
 		@EXTRA_LINKFLAGS = " -Os -Wl,--gc-sections -mmcu=#{@ARDUINO_MCU}"

@@ -210,7 +210,7 @@ class CCompileWork < FileTask
 
 		sfiles = []
 		if(@COLLECT_S_FILES)
-			sfiles = collect_source_files('.s')
+			sfiles = collect_source_files('.S')
 		end
 
 		all_sourcefiles = cfiles + @cppfiles + sfiles
