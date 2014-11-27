@@ -25,7 +25,7 @@ work = ArduinoHexWork.new
 DefaultArduinoEnvironment.extend_to(self)
 
 target :run do
-	runAvrdude(work)
+	uploadHexFile(work)
 	runSerialMonitor
 end
 

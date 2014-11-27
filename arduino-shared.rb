@@ -6,9 +6,10 @@ require 'fileutils'
 
 include FileUtils::Verbose
 
-# This will probably fail on non-Windows platforms.
-# TODO: fix.
-require 'win32/registry'
+if(RUBY_PLATFORM =~ /win32/)
+	# This fails on non-Windows platforms.
+	require 'win32/registry'
+end
 
 require File.expand_path(selfDir+'/rules/cExe.rb')
 require File.expand_path(selfDir+'/rules/cLib.rb')
@@ -17,6 +18,7 @@ require File.expand_path(selfDir+'/arduino-boards.rb')
 require File.expand_path(selfDir+'/localConfig.rb')
 
 SERIAL_MONITOR_PATH = "#{selfDir}/serial-monitor.rb"
+BEAN_UPLOAD_PATH = "#{selfDir}/bean-upload.js"
 
 # don't read variant, read board.
 # then read boards.txt to find variant and other variables.
@@ -67,11 +69,15 @@ def initialize(options)
 
 	boards = ArduinoBoards[@ARDUINO_SDK_DIR, @ARDUINO_ARCHITECTURE_DIR]
 
-	@ARDUINO_VARIANT = boards.send(@ARDUINO_BOARD).build.variant.to_s
+	@board = boards.send(@ARDUINO_BOARD)
+	if(!@board)
+		raise "Unknown board #{@ARDUINO_BOARD}"
+	end
+
+	@ARDUINO_VARIANT = @board.build.variant.to_s
 	if(!@ARDUINO_VARIANT)
 		raise "#{@ARDUINO_BOARD}.build.variant missing!"
 	end
-	@board = boards.send(@ARDUINO_BOARD)
 
 	@ARDUINO_ARCHITECTURE = archFromDir
 
@@ -105,7 +111,7 @@ def initialize(options)
 	@ARDUINO_MCU = mcu.to_s
 	@ARDUINO_FCPU = fcpu.to_s
 
-	@ARDUINO_CORE_DIR = @ARDUINO_SDK_DIR+'hardware/arduino/'+@ARDUINO_ARCHITECTURE_DIR+'cores/arduino'
+	@ARDUINO_CORE_DIR = @ARDUINO_SDK_DIR+'hardware/arduino/'+@ARDUINO_ARCHITECTURE_DIR+'cores/'+@board.build.core.to_s
 
 	@BASIC_ARDUINO_IDIRS = [
 		@ARDUINO_CORE_DIR,
@@ -127,7 +133,7 @@ end
 
 def archFromDir
 	case(@ARDUINO_ARCHITECTURE_DIR)
-		when '', 'avr/'
+		when '', 'avr/', 'bean/'
 			return :avr
 		when 'sam/'
 			return :sam
@@ -281,6 +287,7 @@ def findDefaultComPort
 	# This will definitely fail on non-Windows platforms.
 	# TODO: fix.
 
+	if(RUBY_PLATFORM =~ /win32/)
 	# This function is heuristic and may need modification in the future.
 	# Investigation has shows that Windows stores the numbers of all active serial ports in this Registry key.
 	# Arduino boards are usually connected by USB and appear to have a name starting with '\Device\USBSER'.
@@ -293,6 +300,7 @@ def findDefaultComPort
 			end
 		end
 	end
+	end
 	raise "No appropriate default COM port found! Plug in an Arduino unit, or choose manually." if(!found)
 	return '\\\\.\\' + found
 end
@@ -301,7 +309,7 @@ def selectComPort
 	if(@ARDUINO_COM_PORT == :default)
 		return findDefaultComPort
 	else
-		return "COM#{@ARDUINO_COM_PORT}"
+		return "#{@ARDUINO_COM_PORT}"
 	end
 end
 
@@ -311,8 +319,24 @@ def runAvrdude(work)
 		" -V -p#{@ARDUINO_MCU} -c#{@board.upload.protocol} -P#{selectComPort} -b#{@board.upload.speed} -D \"-Uflash:w:#{work.hexFile}:i\""
 end
 
+def runSomething(work)
+	sh "node \"#{BEAN_UPLOAD_PATH}\" \"#{work.hexFile}\""
+end
+
+def uploadHexFile(work)
+	if(@board.upload.protocol.to_s == 'ptdble')
+		runSomething(work)
+	else
+		runAvrdude(work)
+	end
+end
+
 def runSerialMonitor
-	sh "start cmd /C ruby #{SERIAL_MONITOR_PATH} #{selectComPort} 9600"
+	if(@board.upload.protocol.to_s == 'ptdble')
+		return
+	else
+		sh "start cmd /C ruby #{SERIAL_MONITOR_PATH} #{selectComPort} 9600"
+	end
 end
 
 def runArduinoWorks
@@ -410,6 +434,31 @@ class ArduinoHexWork < ExeWork
 		idirs, utils, @PATTERN_CFLAGS = arduinoIncludeDirctories(inoFileName)
 		@SPECIFIC_CFLAGS = {
 			NAME+'.ino.cpp' => idirFlags(idirs + [Dir.pwd]),
+			'BeanSerialTransport.cpp' => ' -Wno-vla -Wno-shadow -Wno-suggest-attribute=noreturn',
+			'HardwareSerial.cpp' => ' -Wno-sign-compare -Wno-shadow -Wno-unused -Wno-empty-body',
+			'HardwareSerial0.cpp' => ' -Wno-missing-declarations',
+			'Print.cpp' => ' -Wno-attributes',
+			'Tone.cpp' => ' -Wno-shadow -Wno-missing-declarations -Wno-error',
+			'WMath.cpp' => ' -Wno-missing-declarations -Wno-shadow',
+			'WString.cpp' => ' -Wno-missing-declarations -Wno-shadow',
+			'wiring.c' => ' -Wno-old-style-definition',
+			'wiring_digital.c' => ' -Wno-declaration-after-statement',
+			'Dns.cpp' => ' -Wno-shadow -fno-strict-aliasing',
+			'Dhcp.cpp' => ' -Wno-shadow -fno-strict-aliasing -Wstrict-aliasing=0',
+			'EthernetUdp.cpp' => ' -Wno-shadow',
+			'socket.cpp' => ' -Wno-unused-but-set-variable',
+			'WiFi.cpp' => ' -Wno-shadow -Wno-undef',
+			'WiFiClient.cpp' => ' -Wno-undef',
+			'WiFiServer.cpp' => ' -Wno-shadow -Wno-undef',
+			'WiFiUdp.cpp' => ' -Wno-shadow -Wno-undef',
+			'server_drv.cpp' => ' -Wno-undef',
+			'spi_drv.cpp' => ' -Wno-missing-declarations -Wno-undef -Wno-error',
+			'wifi_drv.cpp' => ' -Wno-type-limits -Wno-extra -Wno-undef',
+			'Stream.cpp' => ' -Wno-write-strings',
+			'hooks.c' => ' -Wno-strict-prototypes -Wno-old-style-definition',
+			'acilib.cpp' => ' -Wno-switch',
+			'lib_aci.cpp' => ' -Wno-missing-declarations',
+			'RBL_nRF8001.cpp' => ' -Wno-missing-declarations -Wno-switch',
 		}
 
 		@SOURCES = idirs + utils + [Dir.pwd]
@@ -425,7 +474,14 @@ class ArduinoHexWork < ExeWork
 		end
 
 		@EXTRA_LINKFLAGS = " -Os -Wl,--gc-sections -mmcu=#{@ARDUINO_MCU}"
+
+		if(defined?(HEX_OPTIONS))
+			HEX_OPTIONS.each do |key, value|
+				instance_variable_set('@'+key.to_s, value)
+			end
 		end
+
+		end	# super.do
 		# Once this object is properly constructed, we can create the ones that depend on it.
 		elf = self
 		ShellTask.new(@BUILDDIR+NAME+'.eep', [elf],
