@@ -11,6 +11,7 @@ if(RUBY_PLATFORM =~ /win32/)
 	require 'win32/registry'
 end
 
+require File.expand_path(selfDir+'/shared.rb')
 require File.expand_path(selfDir+'/rules/cExe.rb')
 require File.expand_path(selfDir+'/rules/cLib.rb')
 require File.expand_path(selfDir+'/preprocess.rb')
@@ -79,6 +80,9 @@ def initialize(options)
 		raise "#{@ARDUINO_BOARD}.build.variant missing!"
 	end
 
+	@board = boards.send(@ARDUINO_BOARD)
+	@board.name.dump
+
 	@ARDUINO_ARCHITECTURE = archFromDir
 
 	if(!@ARDUINO_CYGWIN_DIR)
@@ -94,10 +98,12 @@ def initialize(options)
 	fcpu = @board.build.f_cpu
 	mcu = nil if(@board.menu)	# atmegang
 	if(!mcu && @ARDUINO_CPU)
-		build = @board.menu.cpu.send(@ARDUINO_CPU).build
+		cpu = @board.menu.cpu.send(@ARDUINO_CPU)
+		build = cpu.build
 		mcu = build.mcu
 		@mcuSubdir = @ARDUINO_CPU.to_s+'/'
 		fcpu = build.f_cpu if(build.f_cpu)	# pro
+		@board.upload.speed = cpu.upload.speed
 	end
 	if(!mcu)
 		msg = "build.mcu undefined. You must choose a CPU type."
@@ -280,29 +286,6 @@ def arduinoBasicIncludeDirs
 		a << @ARDUINO_SDK_DIR+'hardware/arduino/sam/system/CMSIS/CMSIS/Include'
 	end
 	return a
-end
-
-def findDefaultComPort
-	found = nil
-	# This will definitely fail on non-Windows platforms.
-	# TODO: fix.
-
-	if(RUBY_PLATFORM =~ /win32/)
-	# This function is heuristic and may need modification in the future.
-	# Investigation has shows that Windows stores the numbers of all active serial ports in this Registry key.
-	# Arduino boards are usually connected by USB and appear to have a name starting with '\Device\USBSER'.
-	# It is, as yet, unknown how far this will hold true.
-	Win32::Registry::HKEY_LOCAL_MACHINE.open('HARDWARE\DEVICEMAP\SERIALCOMM') do |reg|
-		reg.each do |name, type, value|
-			if(name.start_with?('\Device\USBSER'))
-				raise "Multiple default COM ports found! Unplug all but one, or choose manually." if(found)
-				found = value
-			end
-		end
-	end
-	end
-	raise "No appropriate default COM port found! Plug in an Arduino unit, or choose manually." if(!found)
-	return '\\\\.\\' + found
 end
 
 def selectComPort
