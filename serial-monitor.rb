@@ -1,8 +1,11 @@
 # stand-alone ruby program.
 # reads from a serial port with specified baud rate, writes to stdout.
 
+selfFile = File.expand_path __FILE__
+selfDir = File.dirname(selfFile)
+
 require 'rubyserial'
-require './shared.rb'
+require File.expand_path(selfDir+'/shared.rb')
 
 PORTNAME = ARGV[0] || findDefaultComPort
 BAUDRATE = (ARGV[1] || 9600).to_i

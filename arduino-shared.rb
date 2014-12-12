@@ -3,6 +3,7 @@ selfDir = File.dirname(selfFile)
 
 require 'stringio'
 require 'fileutils'
+require 'rubyserial'
 
 include FileUtils::Verbose
 
@@ -297,9 +298,22 @@ def selectComPort
 end
 
 def runAvrdude(work)
-	# Insufficient for Leonardo. See SerialUploader.java.
+	uploadPort = selectComPort
+	if(@board.upload.use_1200bps_touch)
+		# Hax for Leonardo. See SerialUploader.java.
+		puts "Doing 1200bps touch on port #{uploadPort}..."
+		touchPort = Serial.new(uploadPort, 1200)
+		touchPort.close()
+
+		if(@board.upload.wait_for_upload_port)
+			sleep(5)
+			uploadPort = selectComPort
+		else
+			sleep(2)
+		end
+	end
 	sh "\"#{@ARDUINO_TOOLS_DIR}avr/bin/avrdude\" \"-C#{@ARDUINO_TOOLS_DIR}avr/etc/avrdude.conf\""+
-		" -V -p#{@ARDUINO_MCU} -c#{@board.upload.protocol} -P#{selectComPort} -b#{@board.upload.speed} -D \"-Uflash:w:#{work.hexFile}:i\""
+		" -V -p#{@ARDUINO_MCU} -c#{@board.upload.protocol} -P#{uploadPort} -b#{@board.upload.speed} -D \"-Uflash:w:#{work.hexFile}:i\""
 end
 
 def runSomething(work)
@@ -318,7 +332,8 @@ def runSerialMonitor
 	if(@board.upload.protocol.to_s == 'ptdble')
 		return
 	else
-		sh "start cmd /C ruby #{SERIAL_MONITOR_PATH} #{selectComPort} 9600"
+		# start cmd /C
+		sh "ruby #{SERIAL_MONITOR_PATH} #{selectComPort} 9600"
 	end
 end
 
@@ -445,6 +460,7 @@ class ArduinoHexWork < ExeWork
 		}
 
 		@SOURCES = idirs + utils + [Dir.pwd]
+		#@IGNORED_FILES = ['new.cpp']
 		@EXTRA_INCLUDES = arduinoBasicIncludeDirs + idirs
 
 		if(defined?(SOURCES))
@@ -452,9 +468,19 @@ class ArduinoHexWork < ExeWork
 			@SPECIFIC_CFLAGS[NAME+'.ino.cpp'] += idirFlags(SOURCES)
 		end
 
+		# add flags from settings.rb.
+		if(defined?(SPECIFIC_CFLAGS))
+			SPECIFIC_CFLAGS.each do |key, value|
+				@SPECIFIC_CFLAGS[key] = (@SPECIFIC_CFLAGS[key] || '') + value
+			end
+		end
+
 		if(defined?(SOURCE_TASKS))
 			@SOURCE_TASKS += SOURCE_TASKS
 		end
+
+		#@EXTRA_CFLAGS = ' -flto'
+		#@EXTRA_CPPFLAGS = ' -flto'
 
 		@EXTRA_LINKFLAGS = " -Os -Wl,--gc-sections -mmcu=#{@ARDUINO_MCU}"
 
