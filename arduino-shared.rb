@@ -466,6 +466,14 @@ class ArduinoHexWork < ExeWork
 			'acilib.cpp' => ' -Wno-switch',
 			'lib_aci.cpp' => ' -Wno-missing-declarations',
 			'RBL_nRF8001.cpp' => ' -Wno-missing-declarations -Wno-switch',
+			'SFE_CC3000.cpp' => ' -Wno-missing-field-initializers',
+			'SFE_CC3000_SPI.cpp' => ' -Wno-unused-variable -Wno-missing-declarations',
+			'cc3000_common.cpp' => ' -Wno-missing-declarations',
+			'evnt_handler.cpp' => ' -Wno-missing-declarations',
+			'socket.cpp' => ' -Wno-missing-declarations -Wno-sign-compare',
+			'security.c' => ' -Wno-missing-declarations -Wno-missing-prototypes -Wno-shadow',
+			'wlan.cpp' => ' -Wno-missing-declarations -Wno-shadow -Wno-sign-compare',
+			'kSeries.cpp' => ' -Wno-vla',
 		}
 
 		@SOURCES = idirs + utils + [Dir.pwd]
