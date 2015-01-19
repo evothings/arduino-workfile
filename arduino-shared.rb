@@ -205,9 +205,12 @@ def arduinoIncludeDirctories(inoFileName)
 		if(res)
 			include = res[1]
 			found = false
+			searches = []
 			# search idirs.
 			idirs.each do |idir|
-				if(File.exist?(idir+'/'+include))
+				s = idir+'/'+include
+				searches << s
+				if(File.exist?(s))
 					found = true
 					puts "Found <#{include}> in #{idir}"
 					break
@@ -222,12 +225,15 @@ def arduinoIncludeDirctories(inoFileName)
 					#puts "test #{idir}"
 					if(File.exist?(idir))
 						path = idir
+						searches << idir+'/'+include
 						if(!File.exist?(idir+'/'+include))
 							idir = path+'/src'
 						end
+						searches << idir+'/'+include
 						if(!File.exist?(idir+'/'+include))
 							idir = path+'/source'
 						end
+						searches << idir+'/'+include
 						if(File.exist?(idir+'/'+include))
 							found = true
 							puts "Found <#{include}> in #{idir}"
@@ -240,6 +246,8 @@ def arduinoIncludeDirctories(inoFileName)
 
 			# searches failed.
 			if(!found)
+				puts "Searched in:"
+				puts searches.join("\n")
 				raise "Include <#{include}> not found!"
 			end
 		end
