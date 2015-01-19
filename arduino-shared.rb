@@ -123,6 +123,7 @@ def initialize(options)
 	@BASIC_ARDUINO_IDIRS = [
 		@ARDUINO_CORE_DIR,
 		@ARDUINO_SDK_DIR+'hardware/arduino/'+@ARDUINO_ARCHITECTURE_DIR+'variants/'+@ARDUINO_VARIANT,
+		@ARDUINO_CYGWIN_DIR+'hardware/tools/'+@ARDUINO_ARCHITECTURE_DIR+@ARDUINO_ARCHITECTURE_DIR+'include',
 	]
 
 	@LIB_ROOT_DIRS = [
