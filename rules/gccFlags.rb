@@ -133,7 +133,7 @@ elsif(@TARGET_PLATFORM == :darwin)
 		sdkNumber = (File.exist?('/Developer/SDKs/MacOSX10.5.sdk')) ? '5':'6'
 		sdkAdress = "/Developer/SDKs/MacOSX10.#{sdkNumber}.sdk"
 	end
-	target_flags = ' -isysroot #{sdkAdress} -mmacosx-version-min=10.5 -DDARWIN -fPIC'
+	target_flags = " -isysroot #{sdkAdress} -mmacosx-version-min=10.5 -DDARWIN -fPIC"
 	target_cppflags = ''
 else
 	if(respond_to?(:customTargetSetFlags))
