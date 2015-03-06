@@ -22,6 +22,9 @@ module GccFlags
 def define_cflags
 super if(defined?(super))
 
+# INFO: To find when warnings are introduced, fetch Warning-Options.html for each GCC version and compare them.
+# OBSERVATION: This is not very user-friendly.
+
 # Valid in GCC 4.3 and later.
 gcc43_warnings = ' -Wvla -Wlogical-op'
 
@@ -42,6 +45,9 @@ gcc47_warnings = '  -Wunused-local-typedefs'
 
 # Valid in C++ only, in GCC 4.7 and later.
 gcc47_cpp_warnings = ' -Wdelete-non-virtual-dtor'
+
+# Valid in C++ only, in GCC 4.9 and later.
+gcc49_cpp_warnings = ' -Wsuggest-override -Wsuggest-final-methods -Wsuggest-final-types'
 
 lesser_warnings = ' -Wpointer-arith -Wundef -Wfloat-equal -Winit-self'
 
@@ -100,6 +106,9 @@ if(@GCC_IS_V4) then
 	if(@GCC_V4_SUB >= 7)
 		version_warnings << gcc47_warnings
 		cpp_flags << gcc47_cpp_warnings
+	end
+	if(@GCC_V4_SUB >= 9)
+		cpp_flags << gcc49_cpp_warnings
 	end
 end
 if(!(@GCC_IS_V4 && @GCC_V4_SUB >= 3)) then
