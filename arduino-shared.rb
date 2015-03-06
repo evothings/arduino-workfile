@@ -53,6 +53,7 @@ ALLOWED_OPTIONS = [
 	:ARDUINO_CPU,
 	:ARDUINO_CYGWIN_DIR,
 	:ARDUINO_TOOLS_DIR,
+	:ARDUINO_MBED_DRIVE,
 ]
 def initialize(options)
 	REQUIRED_OPTIONS.each do |key|
@@ -123,8 +124,11 @@ def initialize(options)
 	@BASIC_ARDUINO_IDIRS = [
 		@ARDUINO_CORE_DIR,
 		@ARDUINO_SDK_DIR+'hardware/arduino/'+@ARDUINO_ARCHITECTURE_DIR+'variants/'+@ARDUINO_VARIANT,
-		@ARDUINO_CYGWIN_DIR+'hardware/tools/'+@ARDUINO_ARCHITECTURE_DIR+@ARDUINO_ARCHITECTURE_DIR+'include',
 	]
+
+	if(@ARDUINO_ARCHITECTURE == :avr)
+		@BASIC_ARDUINO_IDIRS << @ARDUINO_CYGWIN_DIR+'hardware/tools/'+@ARDUINO_ARCHITECTURE_DIR+@ARDUINO_ARCHITECTURE_DIR+'include'
+	end
 
 	@LIB_ROOT_DIRS = [
 		@ARDUINO_SDK_DIR+'hardware/arduino/'+@ARDUINO_ARCHITECTURE_DIR+'libraries/',
@@ -145,6 +149,8 @@ def archFromDir
 			return :avr
 		when 'sam/'
 			return :sam
+		when 'RBL_nRF51822/'
+			return :RBL_nRF51822
 		else
 			raise 'Unhandled architecture: '+@ARDUINO_ARCHITECTURE_DIR
 	end
@@ -330,11 +336,15 @@ def runSomething(work)
 end
 
 def uploadHexFile(work)
+	if(@ARDUINO_MBED_DRIVE)
+		cp work.hexFile, "#{@ARDUINO_MBED_DRIVE}/#{File.basename(work.hexFile)}"
+		return
+	end
 	if(@board.upload.protocol.to_s == 'ptdble')
 		runSomething(work)
-	else
-		runAvrdude(work)
+		return
 	end
+	runAvrdude(work)
 end
 
 def runSerialMonitor
@@ -380,9 +390,10 @@ module ArduinoCompilerModule
 
 	include GccCompilerModule
 	def toolPrefix
-		if(@ARDUINO_ARCHITECTURE == :avr)
+		case(@ARDUINO_ARCHITECTURE)
+		when :avr
 			return 'avr/bin/avr-'
-		elsif(@ARDUINO_ARCHITECTURE == :sam)
+		when :sam, :RBL_nRF51822
 			return 'gcc-arm-none-eabi-4.8.3-2014q1/bin/arm-none-eabi-'
 		else
 			raise 'Unhandled architecture: '+@ARDUINO_ARCHITECTURE
@@ -413,12 +424,16 @@ module ArduinoCompilerModule
 		shared = " -fno-exceptions -ffunction-sections -fdata-sections"+
 			" -DF_CPU=#{@ARDUINO_FCPU} -DARDUINO=157 -DARDUINO_#{build.board} "+bef+
 			" -DUSB_VID=#{build.vid} -DUSB_PID=#{build.pid}"
-		if(@ARDUINO_ARCHITECTURE == :avr)
-			return shared+" -DARDUINO_ARCH_AVR -mmcu=#{@ARDUINO_MCU}"
-		elsif(@ARDUINO_ARCHITECTURE == :sam)
-			return shared+" -DARDUINO_ARCH_SAM -mcpu=#{@ARDUINO_MCU} -nostdlib --param max-inline-insns-single=500"+
+		sam = " -DARDUINO_ARCH_SAM -mcpu=#{@ARDUINO_MCU} -nostdlib --param max-inline-insns-single=500"+
 				" -Dprintf=iprintf"+
 				"  -DUSBCON -DUSB_MANUFACTURER=\"Unknown\" -DUSB_PRODUCT=#{build.usb_product}"
+		case(@ARDUINO_ARCHITECTURE)
+		when :avr
+			return shared+" -DARDUINO_ARCH_AVR -mmcu=#{@ARDUINO_MCU}"
+		when :sam
+			return shared+sam
+		when :RBL_nRF51822
+			return shared+sam+" -DBLE_STACK_SUPPORT_REQD -DDEBUG_NRF_USER -DNRF51"
 		else
 			raise 'Unhandled architecture: '+@ARDUINO_ARCHITECTURE
 		end
@@ -474,6 +489,14 @@ class ArduinoHexWork < ExeWork
 			'security.c' => ' -Wno-missing-declarations -Wno-missing-prototypes -Wno-shadow',
 			'wlan.cpp' => ' -Wno-missing-declarations -Wno-shadow -Wno-sign-compare',
 			'kSeries.cpp' => ' -Wno-vla',
+			'app_timer.c' => ' -Wno-declaration-after-statement -Wno-missing-prototypes -Wno-missing-declarations -Wno-shadow -Wno-unused-local-typedefs -Wno-inline',
+			'delay.c' => ' -Wno-missing-prototypes -Wno-missing-declarations',
+			'app_error_check.c' => ' -Wno-suggest-attribute=noreturn',
+			'interrupt.cpp' => ' -Wno-missing-declarations -Wno-unused-value -Wno-unused-variable',
+			'startup_nrf51822.c' => ' -Wno-suggest-attribute=noreturn',
+			'syscalls.c' => ' -Wno-strict-prototypes',
+			'wiring_analog.c' => ' -Wno-old-style-definition -Wno-missing-braces -Wno-missing-prototypes -Wno-missing-declarations -Wno-unused-variable -Wno-inline',
+			'wiring_digital.c' => ' -Wno-declaration-after-statement',
 		}
 
 		@SOURCES = idirs + utils + [Dir.pwd]
@@ -496,10 +519,19 @@ class ArduinoHexWork < ExeWork
 			@SOURCE_TASKS += SOURCE_TASKS
 		end
 
-		#@EXTRA_CFLAGS = ' -flto'
-		#@EXTRA_CPPFLAGS = ' -flto'
+		#@EXTRA_CFLAGS = @EXTRA_CPPFLAGS = ' -flto'
+		if(@board.build.variant_system_include)
+			s = @board.build.variant_system_include.to_s
+			#p s
+			s.gsub!('{runtime.ide.path}', @ARDUINO_SDK_DIR)
+			s.gsub!('{build.system.path}', @ARDUINO_SDK_DIR+'hardware/arduino/'+@ARDUINO_ARCHITECTURE_DIR+'system')
+			@EXTRA_CFLAGS = @EXTRA_CPPFLAGS = s
+		end
 
-		@EXTRA_LINKFLAGS = " -Os -Wl,--gc-sections -mmcu=#{@ARDUINO_MCU}"
+		@EXTRA_LINKFLAGS = " -Os -Wl,--gc-sections"
+		if(@ARDUINO_ARCHITECTURE == :avr)
+			@EXTRA_LINKFLAGS << " -mmcu=#{@ARDUINO_MCU}"
+		end
 
 		if(defined?(HEX_OPTIONS))
 			HEX_OPTIONS.each do |key, value|
