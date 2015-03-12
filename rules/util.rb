@@ -148,7 +148,9 @@ HashMergeAdd = Proc.new {|key, old, new| old + new }
 def sed(script)
 	if(!self.class.class_variable_defined?(:@@sedIsGnu))
 		open("|sed --version 2>&1") do |file|
-			@@sedIsGnu = file.gets.beginsWith('GNU sed')
+			s = file.gets
+			#puts s
+			@@sedIsGnu = s.include?('GNU sed')
 		end
 	end
 	if((@@sedIsGnu && HOST != :win32) || HOST == :darwin)

@@ -3,7 +3,7 @@ selfDir = File.dirname(selfFile)
 
 require 'stringio'
 require 'fileutils'
-require 'rubyserial'
+#require 'rubyserial'
 
 include FileUtils::Verbose
 
@@ -474,7 +474,7 @@ class ArduinoHexWork < ExeWork
 			'WiFiServer.cpp' => ' -Wno-shadow -Wno-undef',
 			'WiFiUdp.cpp' => ' -Wno-shadow -Wno-undef',
 			'server_drv.cpp' => ' -Wno-undef',
-			'spi_drv.cpp' => ' -Wno-missing-declarations -Wno-undef -Wno-error',
+			'spi_drv.cpp' => ' -Wno-missing-declarations -Wno-undef -Wno-error -Wno-empty-body',
 			'wifi_drv.cpp' => ' -Wno-type-limits -Wno-extra -Wno-undef',
 			'Stream.cpp' => ' -Wno-write-strings',
 			'hooks.c' => ' -Wno-strict-prototypes -Wno-old-style-definition',
