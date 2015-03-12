@@ -17,11 +17,15 @@ end
 
 # Set up signal handling, so we can quit when properly poked.
 Signal.list.each do |name, number|
+	begin
 	Signal.trap(name) do
 		puts "SIG#{name}"
 		if(name != 'EXIT')
 			exit!(0)
 		end
+	end
+	rescue => e
+		puts e
 	end
 end
 
